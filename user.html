@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartRetail - User Panel</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f4f6fb; color: #222; min-height: 100vh; display: flex; flex-direction: column; }
+    /* Navbar */
+    nav { background: #1a237e; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 60px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+    .nav-brand { font-size: 1.4rem; font-weight: 700; letter-spacing: 1px; cursor: pointer; }
+    .nav-links { display: flex; align-items: center; gap: 8px; }
+    .nav-links a, .nav-links button { color: #fff; background: none; border: none; cursor: pointer; font-size: 0.97rem; padding: 8px 14px; border-radius: 6px; text-decoration: none; transition: background 0.2s; }
+    .nav-links a:hover, .nav-links button:hover { background: rgba(255,255,255,0.15); }
+    .cart-badge { background: #ff5252; color: #fff; border-radius: 50%; font-size: 0.72rem; padding: 1px 6px; margin-left: 3px; vertical-align: middle; }
+    .btn-scan { background: #43a047 !important; border-radius: 20px !important; padding: 7px 18px !important; font-weight: 600 !important; }
+    .btn-admin { background: #ff6f00 !important; border-radius: 20px !important; padding: 7px 18px !important; font-weight: 600 !important; }
+    /* Main */
+    main { flex: 1; padding: 24px 16px; max-width: 1100px; margin: 0 auto; width: 100%; }
+    /* Footer */
+    footer { background: #1a237e; color: #cfd8dc; text-align: center; padding: 14px; font-size: 0.9rem; }
+    /* Hero */
+    .hero { background: linear-gradient(135deg, #1a237e 0%, #42a5f5 100%); color: #fff; border-radius: 16px; padding: 48px 32px; text-align: center; margin-bottom: 32px; }
+    .hero h1 { font-size: 2.2rem; margin-bottom: 10px; }
+    .hero p { font-size: 1.1rem; opacity: 0.9; margin-bottom: 24px; }
+    .hero-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn { display: inline-block; padding: 11px 28px; border-radius: 8px; border: none; cursor: pointer; font-size: 1rem; font-weight: 600; transition: opacity 0.2s, transform 0.1s; }
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn-primary { background: #fff; color: #1a237e; }
+    .btn-secondary { background: rgba(255,255,255,0.18); color: #fff; border: 2px solid #fff; }
+    .btn-danger { background: #e53935; color: #fff; }
+    .btn-success { background: #43a047; color: #fff; }
+    .btn-outline { background: #fff; color: #1a237e; border: 2px solid #1a237e; }
+    /* Category cards */
+    .section-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 16px; color: #1a237e; }
+    .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .cat-card { background: #fff; border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.07); transition: transform 0.18s, box-shadow 0.18s; }
+    .cat-card:hover { transform: translateY(-4px); box-shadow: 0 6px 18px rgba(0,0,0,0.13); }
+    .cat-icon { font-size: 2.4rem; margin-bottom: 10px; }
+    .cat-name { font-weight: 600; color: #333; }
+    /* Product grid */
+    .prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+    .prod-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.07); transition: transform 0.18s, box-shadow 0.18s; cursor: pointer; }
+    .prod-card:hover { transform: translateY(-4px); box-shadow: 0 6px 18px rgba(0,0,0,0.13); }
+    .prod-img { width: 100%; height: 160px; object-fit: cover; background: #e8eaf6; display: flex; align-items: center; justify-content: center; font-size: 3rem; }
+    .prod-info { padding: 14px; }
+    .prod-name { font-weight: 600; font-size: 1rem; margin-bottom: 4px; }
+    .prod-cat { font-size: 0.8rem; color: #888; margin-bottom: 6px; text-transform: capitalize; }
+    .prod-price { font-size: 1.1rem; font-weight: 700; color: #1a237e; margin-bottom: 10px; }
+    .prod-card .btn { width: 100%; padding: 8px; font-size: 0.92rem; }
+    /* Detail page */
+    .detail-wrap { display: flex; gap: 32px; flex-wrap: wrap; background: #fff; border-radius: 16px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .detail-img { font-size: 7rem; width: 260px; height: 260px; background: #e8eaf6; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .detail-info { flex: 1; min-width: 220px; }
+    .detail-info h2 { font-size: 1.7rem; margin-bottom: 8px; }
+    .detail-info .price { font-size: 1.5rem; font-weight: 700; color: #1a237e; margin-bottom: 12px; }
+    .detail-info .desc { color: #555; margin-bottom: 20px; line-height: 1.6; }
+    .detail-info .badge { display: inline-block; background: #e8eaf6; color: #1a237e; border-radius: 20px; padding: 3px 14px; font-size: 0.85rem; margin-bottom: 16px; text-transform: capitalize; }
+    .detail-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    /* Cart */
+    .cart-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+    .cart-table th { background: #1a237e; color: #fff; padding: 12px 16px; text-align: left; font-size: 0.95rem; }
+    .cart-table td { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    .cart-table tr:last-child td { border-bottom: none; }
+    .qty-ctrl { display: flex; align-items: center; gap: 8px; }
+    .qty-ctrl button { background: #e8eaf6; border: none; border-radius: 6px; width: 30px; height: 30px; font-size: 1.1rem; cursor: pointer; font-weight: 700; }
+    .qty-ctrl span { min-width: 24px; text-align: center; font-weight: 600; }
+    .cart-summary { background: #fff; border-radius: 12px; padding: 24px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .cart-total { font-size: 1.3rem; font-weight: 700; color: #1a237e; }
+    /* Payment page */
+    .pay-wrap { max-width: 480px; margin: 0 auto; background: #fff; border-radius: 16px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .pay-wrap h2 { margin-bottom: 20px; color: #1a237e; }
+    .pay-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.97rem; }
+    .pay-total { display: flex; justify-content: space-between; padding: 14px 0 0; font-size: 1.2rem; font-weight: 700; color: #1a237e; }
+    /* Orders */
+    .order-card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+    .order-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .order-id { font-weight: 700; color: #1a237e; font-size: 0.95rem; }
+    .order-date { color: #888; font-size: 0.85rem; }
+    .order-status { background: #e8f5e9; color: #2e7d32; border-radius: 20px; padding: 3px 14px; font-size: 0.85rem; font-weight: 600; }
+    .order-items { font-size: 0.93rem; color: #555; margin-bottom: 10px; }
+    .order-total { font-weight: 700; color: #1a237e; }
+    /* Modals */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #fff; border-radius: 16px; padding: 32px; max-width: 480px; width: 95%; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+    .modal h2 { margin-bottom: 18px; color: #1a237e; }
+    .modal-close { position: absolute; top: 14px; right: 18px; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #888; }
+    .modal-close:hover { color: #e53935; }
+    .modal-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+    /* Bill modal */
+    .bill-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e0e0e0; font-size: 0.95rem; }
+    .bill-total { display: flex; justify-content: space-between; padding: 12px 0 0; font-size: 1.15rem; font-weight: 700; color: #1a237e; }
+    /* Scanner modal */
+    #qr-reader { width: 100%; border-radius: 8px; overflow: hidden; }
+    /* Toast */
+    #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+    .toast { background: #323232; color: #fff; padding: 12px 22px; border-radius: 8px; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: slideIn 0.3s ease; min-width: 200px; }
+    .toast.success { background: #2e7d32; }
+    .toast.error { background: #c62828; }
+    .toast.info { background: #1565c0; }
+    @keyframes slideIn { from { transform: translateX(60px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    /* Filter bar */
+    .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+    .filter-bar input { flex: 1; min-width: 180px; padding: 9px 14px; border: 1.5px solid #c5cae9; border-radius: 8px; font-size: 0.97rem; outline: none; }
+    .filter-bar input:focus { border-color: #1a237e; }
+    .filter-bar select { padding: 9px 14px; border: 1.5px solid #c5cae9; border-radius: 8px; font-size: 0.97rem; outline: none; background: #fff; }
+    /* Back btn */
+    .back-btn { background: none; border: none; color: #1a237e; font-size: 1rem; cursor: pointer; margin-bottom: 18px; display: flex; align-items: center; gap: 6px; font-weight: 600; }
+    .back-btn:hover { text-decoration: underline; }
+    /* Empty state */
+    .empty-state { text-align: center; padding: 60px 20px; color: #888; }
+    .empty-state .icon { font-size: 3.5rem; margin-bottom: 14px; }
+    .empty-state p { font-size: 1.1rem; margin-bottom: 20px; }
+    /* Payment modal */
+    .pay-method { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .pay-method label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 0.97rem; background: #f4f6fb; border: 2px solid #c5cae9; border-radius: 8px; padding: 10px 18px; transition: border-color 0.2s; }
+    .pay-method label:has(input:checked) { border-color: #1a237e; background: #e8eaf6; }
+    @media (max-width: 600px) {
+      .detail-wrap { flex-direction: column; }
+      .detail-img { width: 100%; }
+      nav { padding: 0 10px; }
+      .nav-links a, .nav-links button { padding: 6px 8px; font-size: 0.85rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav>
+    <div class="nav-brand" onclick="navigateTo('home')">SmartRetail</div>
+    <div class="nav-links">
+      <a onclick="navigateTo('home')">Home</a>
+      <a onclick="navigateTo('products')">Products</a>
+      <a onclick="navigateTo('cart')">Cart <span class="cart-badge" id="cart-badge">0</span></a>
+      <a onclick="navigateTo('orders')">Orders</a>
+      <button class="btn-scan" onclick="openScanner()">&#128247; Scan</button>
+      <a class="btn-admin" href="admin.html">Admin</a>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main id="app-root"></main>
+
+  <!-- Footer -->
+  <footer>&copy; 2026 HKBK SmartRetail</footer>
+
+  <!-- Payment Modal -->
+  <div class="modal-overlay" id="paymentModal">
+    <div class="modal">
+      <button class="modal-close" onclick="document.getElementById('paymentModal').classList.remove('active')">&times;</button>
+      <h2>&#128179; Payment</h2>
+      <div id="payment-modal-items"></div>
+      <div class="pay-total" id="payment-modal-total"></div>
+      <div class="modal-actions">
+        <button class="btn btn-success" onclick="launchRazorpay()">Pay Now</button>
+        <button class="btn btn-outline" onclick="document.getElementById('paymentModal').classList.remove('active')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bill Modal -->
+  <div class="modal-overlay" id="billModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeBillModal()">&times;</button>
+      <h2>&#129534; Bill / Receipt</h2>
+      <div id="bill-modal-content"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="printBill()">&#128424; Print</button>
+        <button class="btn btn-outline" onclick="closeBillModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scanner Modal -->
+  <div class="modal-overlay" id="scannerModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeScanner()">&times;</button>
+      <h2>&#128247; Scan Product QR</h2>
+      <div id="qr-reader"></div>
+      <p id="qr-result" style="margin-top:12px;color:#1a237e;font-weight:600;"></p>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container"></div>
+
+  <script>
+    // ===================== FIREBASE INIT =====================
+    var firebaseConfig = {
+      apiKey: "AIzaSyAbYQgkZmaF0RnycE30qnqJxRCRILrBXbY",
+      authDomain: "reatial-atomatiopn.firebaseapp.com",
+      projectId: "reatial-atomatiopn",
+      storageBucket: "reatial-atomatiopn.firebasestorage.app",
+      messagingSenderId: "1059625101632",
+      appId: "1:1059625101632:web:750e0a52f61c7a56e5b2a5",
+      measurementId: "G-98SW3S8CJK"
+    };
+    firebase.initializeApp(firebaseConfig);
+    var db = firebase.firestore();
+
+    // ===================== STATE =====================
+    var cart = [];
+    var products = [];
+    var currentPage = 'home';
+    var currentProduct = null;
+    var currentOrderForBill = null;
+    var qrScanner = null;
+    var RAZORPAY_KEY = 'rzp_test_ShLaoG8nYp4WdK';
+
+    // ===================== DEFAULT PRODUCTS =====================
+    var defaultProducts = [
+      { id: 'p1',  name: 'Classic White Shirt',    category: 'clothing',    price: 799,   emoji: '\u{1F455}', description: 'Premium cotton white shirt, perfect for formal occasions.' },
+      { id: 'p2',  name: 'Slim Fit Jeans',          category: 'clothing',    price: 1299,  emoji: '\u{1F456}', description: 'Comfortable slim fit denim jeans in dark blue.' },
+      { id: 'p3',  name: 'Running Sneakers',        category: 'clothing',    price: 2499,  emoji: '\u{1F45F}', description: 'Lightweight running shoes with cushioned sole.' },
+      { id: 'p4',  name: 'Wooden Study Table',      category: 'furniture',   price: 6999,  emoji: '\u{1FA91}', description: 'Solid wood study table with drawer and shelf.' },
+      { id: 'p5',  name: 'Ergonomic Office Chair',  category: 'furniture',   price: 8499,  emoji: '\u{1FA91}', description: 'Adjustable ergonomic chair for long work sessions.' },
+      { id: 'p6',  name: 'Bookshelf 5-Tier',        category: 'furniture',   price: 4299,  emoji: '\u{1F4DA}', description: 'Spacious 5-tier bookshelf in walnut finish.' },
+      { id: 'p7',  name: 'Wireless Headphones',     category: 'electronics', price: 3499,  emoji: '\u{1F3A7}', description: 'Over-ear wireless headphones with noise cancellation.' },
+      { id: 'p8',  name: 'Smart LED TV 43"',        category: 'electronics', price: 28999, emoji: '\u{1F4FA}', description: '43-inch 4K Smart LED TV with built-in streaming apps.' },
+      { id: 'p9',  name: 'Bluetooth Speaker',       category: 'electronics', price: 1899,  emoji: '\u{1F50A}', description: 'Portable waterproof Bluetooth speaker, 12hr battery.' },
+      { id: 'p10', name: 'Basmati Rice 5kg',        category: 'groceries',   price: 399,   emoji: '\u{1F35A}', description: 'Premium aged basmati rice, long grain, aromatic.' },
+      { id: 'p11', name: 'Cold Pressed Olive Oil',  category: 'groceries',   price: 649,   emoji: '\u{1FAD2}', description: 'Extra virgin cold pressed olive oil, 500ml bottle.' },
+      { id: 'p12', name: 'Mixed Nuts Pack',         category: 'groceries',   price: 549,   emoji: '\u{1F95C}', description: 'Assorted premium nuts - almonds, cashews, walnuts, 250g.' }
+    ];
+
+    var categories = [
+      { key: 'clothing',    label: 'Clothing',     emoji: '\u{1F455}' },
+      { key: 'furniture',   label: 'Furniture',    emoji: '\u{1FA91}' },
+      { key: 'electronics', label: 'Electronics',  emoji: '\u{1F4BB}' },
+      { key: 'groceries',   label: 'Groceries',    emoji: '\u{1F6D2}' }
+    ];
+
+    // ===================== NAVIGATION =====================
+    function navigateTo(page, cat) {
+      currentPage = page;
+      if (page === 'home') renderHome();
+      else if (page === 'products') renderProducts(cat || '');
+      else if (page === 'detail') renderProductDetail(currentProduct);
+      else if (page === 'cart') renderCart();
+      else if (page === 'payment') renderPaymentPage();
+      else if (page === 'orders') renderOrders();
+      window.scrollTo(0, 0);
+    }
+    window.navigateTo = navigateTo;
+
+    // ===================== RENDER HOME =====================
+    function renderHome() {
+      var root = document.getElementById('app-root');
+      var catCards = '';
+      for (var i = 0; i < categories.length; i++) {
+        var c = categories[i];
+        catCards += '<div class="cat-card" onclick="navigateTo(\'products\',\'' + c.key + '\')">';
+        catCards += '<div class="cat-icon">' + c.emoji + '</div>';
+        catCards += '<div class="cat-name">' + c.label + '</div>';
+        catCards += '</div>';
+      }
+      var featuredCards = '';
+      var featured = products.slice(0, 4);
+      for (var j = 0; j < featured.length; j++) {
+        featuredCards += buildProductCard(featured[j]);
+      }
+      root.innerHTML =
+        '<div class="hero">' +
+          '<h1>Welcome to SmartRetail</h1>' +
+          '<p>Discover amazing products across all categories</p>' +
+          '<div class="hero-btns">' +
+            '<button class="btn btn-primary" onclick="navigateTo(\'products\')">Shop Now</button>' +
+            '<button class="btn btn-secondary" onclick="navigateTo(\'orders\')">My Orders</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="section-title">Shop by Category</div>' +
+        '<div class="cat-grid">' + catCards + '</div>' +
+        '<div class="section-title">Featured Products</div>' +
+        '<div class="prod-grid">' + featuredCards + '</div>';
+    }
+    window.renderHome = renderHome;
+
+    // ===================== BUILD PRODUCT CARD =====================
+    function buildProductCard(p) {
+      return '<div class="prod-card" onclick="viewProduct(\'' + p.id + '\')">' +
+        '<div class="prod-img">' + p.emoji + '</div>' +
+        '<div class="prod-info">' +
+          '<div class="prod-name">' + p.name + '</div>' +
+          '<div class="prod-cat">' + p.category + '</div>' +
+          '<div class="prod-price">&#8377;' + p.price.toLocaleString('en-IN') + '</div>' +
+          '<button class="btn btn-primary" onclick="event.stopPropagation();addToCart(\'' + p.id + '\')">Add to Cart</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // ===================== RENDER PRODUCTS =====================
+    function renderProducts(cat) {
+      var root = document.getElementById('app-root');
+      var catOptions = '<option value="">All Categories</option>';
+      for (var i = 0; i < categories.length; i++) {
+        var sel = (categories[i].key === cat) ? ' selected' : '';
+        catOptions += '<option value="' + categories[i].key + '"' + sel + '>' + categories[i].label + '</option>';
+      }
+      root.innerHTML =
+        '<div class="filter-bar">' +
+          '<input type="text" id="search-input" placeholder="Search products..." oninput="filterProducts()" />' +
+          '<select id="cat-filter" onchange="filterProducts()">' + catOptions + '</select>' +
+        '</div>' +
+        '<div class="prod-grid" id="prod-list"></div>';
+      filterProducts(cat);
+    }
+    window.renderProducts = renderProducts;
+
+    function filterProducts(defaultCat) {
+      var search = (document.getElementById('search-input') ? document.getElementById('search-input').value : '').toLowerCase();
+      var catEl = document.getElementById('cat-filter');
+      var cat = catEl ? catEl.value : (defaultCat || '');
+      var list = document.getElementById('prod-list');
+      if (!list) return;
+      var filtered = products.filter(function(p) {
+        var matchCat = !cat || p.category === cat;
+        var matchSearch = !search || p.name.toLowerCase().indexOf(search) !== -1 || p.category.toLowerCase().indexOf(search) !== -1;
+        return matchCat && matchSearch;
+      });
+      if (filtered.length === 0) {
+        list.innerHTML = '<div class="empty-state"><div class="icon">&#128269;</div><p>No products found.</p></div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < filtered.length; i++) html += buildProductCard(filtered[i]);
+      list.innerHTML = html;
+    }
+    window.filterProducts = filterProducts;
+
+    // ===================== VIEW PRODUCT DETAIL =====================
+    function viewProduct(id) {
+      var p = getProductById(id);
+      if (!p) return;
+      currentProduct = p;
+      navigateTo('detail');
+    }
+    window.viewProduct = viewProduct;
+
+    function renderProductDetail(p) {
+      if (!p) { navigateTo('home'); return; }
+      var root = document.getElementById('app-root');
+      root.innerHTML =
+        '<button class="back-btn" onclick="history.back ? navigateTo(\'products\') : navigateTo(\'products\')">&#8592; Back to Products</button>' +
+        '<div class="detail-wrap">' +
+          '<div class="detail-img">' + p.emoji + '</div>' +
+          '<div class="detail-info">' +
+            '<span class="badge">' + p.category + '</span>' +
+            '<h2>' + p.name + '</h2>' +
+            '<div class="price">&#8377;' + p.price.toLocaleString('en-IN') + '</div>' +
+            '<div class="desc">' + p.description + '</div>' +
+            '<div class="detail-actions">' +
+              '<button class="btn btn-primary" onclick="addToCart(\'' + p.id + '\')">Add to Cart</button>' +
+              '<button class="btn btn-success" onclick="addToCart(\'' + p.id + '\');navigateTo(\'cart\')">Buy Now</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }
+    window.renderProductDetail = renderProductDetail;
+
+    // ===================== CART FUNCTIONS =====================
+    function addToCart(id) {
+      var p = getProductById(id);
+      if (!p) return;
+      var existing = null;
+      for (var i = 0; i < cart.length; i++) {
+        if (cart[i].id === id) { existing = cart[i]; break; }
+      }
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        cart.push({ id: p.id, name: p.name, price: p.price, emoji: p.emoji, qty: 1 });
+      }
+      updateCartBadge();
+      showToast(p.name + ' added to cart!', 'success');
+    }
+    window.addToCart = addToCart;
+
+    function removeFromCart(id) {
+      cart = cart.filter(function(item) { return item.id !== id; });
+      updateCartBadge();
+      if (currentPage === 'cart') renderCart();
+    }
+    window.removeFromCart = removeFromCart;
+
+    function updateCartQty(id, qty) {
+      qty = parseInt(qty, 10);
+      if (isNaN(qty) || qty < 1) { removeFromCart(id); return; }
+      for (var i = 0; i < cart.length; i++) {
+        if (cart[i].id === id) { cart[i].qty = qty; break; }
+      }
+      updateCartBadge();
+      if (currentPage === 'cart') renderCart();
+    }
+    window.updateCartQty = updateCartQty;
+
+    function updateCartBadge() {
+      var total = 0;
+      for (var i = 0; i < cart.length; i++) total += cart[i].qty;
+      document.getElementById('cart-badge').textContent = total;
+    }
+
+    function cartTotal() {
+      var t = 0;
+      for (var i = 0; i < cart.length; i++) t += cart[i].price * cart[i].qty;
+      return t;
+    }
+
+    // ===================== RENDER CART =====================
+    function renderCart() {
+      var root = document.getElementById('app-root');
+      if (cart.length === 0) {
+        root.innerHTML =
+          '<div class="empty-state">' +
+            '<div class="icon">&#128722;</div>' +
+            '<p>Your cart is empty.</p>' +
+            '<button class="btn btn-primary" onclick="navigateTo(\'products\')">Shop Now</button>' +
+          '</div>';
+        return;
+      }
+      var rows = '';
+      for (var i = 0; i < cart.length; i++) {
+        var item = cart[i];
+        rows +=
+          '<tr>' +
+            '<td>' + item.emoji + ' ' + item.name + '</td>' +
+            '<td>&#8377;' + item.price.toLocaleString('en-IN') + '</td>' +
+            '<td>' +
+              '<div class="qty-ctrl">' +
+                '<button onclick="updateCartQty(\'' + item.id + '\',' + (item.qty - 1) + ')">-</button>' +
+                '<span>' + item.qty + '</span>' +
+                '<button onclick="updateCartQty(\'' + item.id + '\',' + (item.qty + 1) + ')">+</button>' +
+              '</div>' +
+            '</td>' +
+            '<td>&#8377;' + (item.price * item.qty).toLocaleString('en-IN') + '</td>' +
+            '<td><button class="btn btn-danger" style="padding:5px 12px;font-size:0.85rem;" onclick="removeFromCart(\'' + item.id + '\')">Remove</button></td>' +
+          '</tr>';
+      }
+      root.innerHTML =
+        '<div class="section-title">&#128722; Your Cart</div>' +
+        '<table class="cart-table">' +
+          '<thead><tr><th>Product</th><th>Price</th><th>Qty</th><th>Subtotal</th><th></th></tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+        '<div class="cart-summary">' +
+          '<div class="cart-total">Total: &#8377;' + cartTotal().toLocaleString('en-IN') + '</div>' +
+          '<button class="btn btn-success" onclick="proceedToPay()">Proceed to Pay</button>' +
+        '</div>';
+    }
+    window.renderCart = renderCart;
+
+    // ===================== PAYMENT PAGE =====================
+    function renderPaymentPage() {
+      var root = document.getElementById('app-root');
+      if (cart.length === 0) { navigateTo('cart'); return; }
+      var rows = '';
+      for (var i = 0; i < cart.length; i++) {
+        var item = cart[i];
+        rows += '<div class="pay-item"><span>' + item.emoji + ' ' + item.name + ' x' + item.qty + '</span><span>&#8377;' + (item.price * item.qty).toLocaleString('en-IN') + '</span></div>';
+      }
+      root.innerHTML =
+        '<div class="pay-wrap">' +
+          '<h2>&#128179; Order Summary</h2>' +
+          rows +
+          '<div class="pay-total"><span>Total</span><span>&#8377;' + cartTotal().toLocaleString('en-IN') + '</span></div>' +
+          '<div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;">' +
+            '<button class="btn btn-success" onclick="proceedToPay()">Pay Now</button>' +
+            '<button class="btn btn-outline" onclick="navigateTo(\'cart\')">Back to Cart</button>' +
+          '</div>' +
+        '</div>';
+    }
+    window.renderPaymentPage = renderPaymentPage;
+
+    // ===================== PROCEED TO PAY =====================
+    function proceedToPay() {
+      if (cart.length === 0) { showToast('Cart is empty!', 'error'); return; }
+      var itemsHtml = '';
+      for (var i = 0; i < cart.length; i++) {
+        var item = cart[i];
+        itemsHtml += '<div class="pay-item"><span>' + item.emoji + ' ' + item.name + ' x' + item.qty + '</span><span>&#8377;' + (item.price * item.qty).toLocaleString('en-IN') + '</span></div>';
+      }
+      document.getElementById('payment-modal-items').innerHTML = itemsHtml;
+      document.getElementById('payment-modal-total').innerHTML = '<span>Total</span><span>&#8377;' + cartTotal().toLocaleString('en-IN') + '</span>';
+      document.getElementById('paymentModal').classList.add('active');
+    }
+    window.proceedToPay = proceedToPay;
+
+    // ===================== RAZORPAY =====================
+    function launchRazorpay() {
+      document.getElementById('paymentModal').classList.remove('active');
+      var amount = cartTotal() * 100;
+      var options = {
+        key: RAZORPAY_KEY,
+        amount: amount,
+        currency: 'INR',
+        name: 'SmartRetail',
+        description: 'Order Payment',
+        image: 'https://i.imgur.com/n5tjHFD.png',
+        handler: function(response) {
+          onPaymentSuccess(response.razorpay_payment_id);
+        },
+        prefill: { name: 'Customer', email: 'customer@example.com', contact: '9999999999' },
+        config: {
+          display: {
+            blocks: {
+              card: { name: 'Pay by Card', instruments: [{ method: 'card' }] },
+              upi:  { name: 'Pay by UPI',  instruments: [{ method: 'upi'  }] },
+              nb:   { name: 'Net Banking', instruments: [{ method: 'netbanking' }] },
+              wallet: { name: 'Wallets',   instruments: [{ method: 'wallet' }] }
+            },
+            sequence: ['block.card', 'block.upi', 'block.nb', 'block.wallet'],
+            preferences: { show_default_blocks: false }
+          }
+        },
+        theme: { color: '#1a237e' },
+        modal: {
+          ondismiss: function() { showToast('Payment cancelled.', 'info'); }
+        }
+      };
+      var rzp = new Razorpay(options);
+      rzp.open();
+    }
+    window.launchRazorpay = launchRazorpay;
+
+    // ===================== ON PAYMENT SUCCESS =====================
+    function onPaymentSuccess(paymentId) {
+      var orderItems = [];
+      for (var i = 0; i < cart.length; i++) {
+        orderItems.push({
+          id: cart[i].id,
+          name: cart[i].name,
+          price: cart[i].price,
+          qty: cart[i].qty,
+          subtotal: cart[i].price * cart[i].qty
+        });
+      }
+      var order = {
+        paymentId: paymentId,
+        items: orderItems,
+        total: cartTotal(),
+        status: 'Paid',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAtLocal: new Date().toISOString()
+      };
+      db.collection('orders').add(order).then(function(docRef) {
+        showToast('Order placed! Payment ID: ' + paymentId, 'success');
+        cart = [];
+        updateCartBadge();
+        currentOrderForBill = { id: docRef.id, paymentId: paymentId, items: orderItems, total: order.total, createdAtLocal: order.createdAtLocal };
+        navigateTo('orders');
+        setTimeout(function() { openBillModal(docRef.id); }, 600);
+      }).catch(function(err) {
+        showToast('Order saved locally. ' + err.message, 'info');
+        cart = [];
+        updateCartBadge();
+        navigateTo('orders');
+      });
+    }
+    window.onPaymentSuccess = onPaymentSuccess;
+
+    // ===================== ORDERS =====================
+    function renderOrders() {
+      var root = document.getElementById('app-root');
+      root.innerHTML = '<div class="section-title">&#128203; My Orders</div><div id="orders-list"><div style="text-align:center;padding:40px;color:#888;">Loading orders...</div></div>';
+      db.collection('orders').orderBy('createdAt', 'desc').limit(30).get().then(function(snap) {
+        var list = document.getElementById('orders-list');
+        if (!list) return;
+        if (snap.empty) {
+          list.innerHTML = '<div class="empty-state"><div class="icon">&#128203;</div><p>No orders yet.</p><button class="btn btn-primary" onclick="navigateTo(\'products\')">Start Shopping</button></div>';
+          return;
+        }
+        var html = '';
+        snap.forEach(function(doc) {
+          var o = doc.data();
+          var dateStr = o.createdAtLocal ? new Date(o.createdAtLocal).toLocaleString('en-IN') : 'N/A';
+          var itemNames = '';
+          if (o.items && o.items.length) {
+            var names = [];
+            for (var i = 0; i < o.items.length; i++) names.push(o.items[i].name + ' x' + o.items[i].qty);
+            itemNames = names.join(', ');
+          }
+          html +=
+            '<div class="order-card">' +
+              '<div class="order-header">' +
+                '<span class="order-id">Order #' + doc.id.slice(-8).toUpperCase() + '</span>' +
+                '<span class="order-date">' + dateStr + '</span>' +
+                '<span class="order-status">' + (o.status || 'Paid') + '</span>' +
+              '</div>' +
+              '<div class="order-items">' + itemNames + '</div>' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+                '<span class="order-total">&#8377;' + (o.total || 0).toLocaleString('en-IN') + '</span>' +
+                '<button class="btn btn-outline" style="padding:6px 16px;font-size:0.88rem;" onclick="openBillModal(\'' + doc.id + '\')">View Bill</button>' +
+              '</div>' +
+            '</div>';
+        });
+        list.innerHTML = html;
+      }).catch(function(err) {
+        var list = document.getElementById('orders-list');
+        if (list) list.innerHTML = '<div class="empty-state"><div class="icon">&#9888;</div><p>Could not load orders: ' + err.message + '</p></div>';
+      });
+    }
+    window.renderOrders = renderOrders;
+
+    // ===================== BILL MODAL =====================
+    function openBillModal(orderId) {
+      db.collection('orders').doc(orderId).get().then(function(doc) {
+        if (!doc.exists) { showToast('Order not found.', 'error'); return; }
+        var o = doc.data();
+        var dateStr = o.createdAtLocal ? new Date(o.createdAtLocal).toLocaleString('en-IN') : 'N/A';
+        var rows = '';
+        if (o.items && o.items.length) {
+          for (var i = 0; i < o.items.length; i++) {
+            var item = o.items[i];
+            rows += '<div class="bill-row"><span>' + item.name + ' x' + item.qty + '</span><span>&#8377;' + (item.subtotal || item.price * item.qty).toLocaleString('en-IN') + '</span></div>';
+          }
+        }
+        var content =
+          '<div style="margin-bottom:12px;">' +
+            '<strong>Order ID:</strong> ' + doc.id + '<br/>' +
+            '<strong>Payment ID:</strong> ' + (o.paymentId || 'N/A') + '<br/>' +
+            '<strong>Date:</strong> ' + dateStr + '<br/>' +
+            '<strong>Status:</strong> ' + (o.status || 'Paid') +
+          '</div>' +
+          rows +
+          '<div class="bill-total"><span>Total</span><span>&#8377;' + (o.total || 0).toLocaleString('en-IN') + '</span></div>';
+        document.getElementById('bill-modal-content').innerHTML = content;
+        currentOrderForBill = { id: doc.id, data: o };
+        document.getElementById('billModal').classList.add('active');
+      }).catch(function(err) {
+        showToast('Error loading bill: ' + err.message, 'error');
+      });
+    }
+    window.openBillModal = openBillModal;
+
+    function closeBillModal() {
+      document.getElementById('billModal').classList.remove('active');
+    }
+    window.closeBillModal = closeBillModal;
+
+    function printBill() {
+      var content = document.getElementById('bill-modal-content');
+      if (!content) return;
+      var billHtml = content.innerHTML;
+      var doc = window.open('', '_blank', 'width=480,height=600');
+      doc.document.write('<!DOCTYPE html>');
+      doc.document.write('<html><head><title>SmartRetail Bill</title>');
+      doc.document.write('<style>');
+      doc.document.write('body{font-family:sans-serif;padding:24px;max-width:400px;margin:0 auto;}');
+      doc.document.write('h2{color:#1a237e;margin-bottom:16px;}');
+      doc.document.write('.bill-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #ccc;}');
+      doc.document.write('.bill-total{display:flex;justify-content:space-between;padding:12px 0 0;font-size:1.1rem;font-weight:700;color:#1a237e;}');
+      doc.document.write('</' + 'style>');
+      doc.document.write('</' + 'head><body>');
+      doc.document.write('<h2>SmartRetail - Receipt</h2>');
+      doc.document.write(billHtml);
+      doc.document.write('<p style="margin-top:24px;text-align:center;color:#888;font-size:0.85rem;">Thank you for shopping with SmartRetail!</p>');
+      doc.document.write('</' + 'body></' + 'html>');
+      doc.document.close();
+      doc.focus();
+      doc.print();
+    }
+    window.printBill = printBill;
+
+    // ===================== SCANNER =====================
+    function openScanner() {
+      document.getElementById('scannerModal').classList.add('active');
+      document.getElementById('qr-result').textContent = '';
+      setTimeout(function() {
+        if (qrScanner) {
+          try { qrScanner.stop(); } catch(e) {}
+          qrScanner = null;
+        }
+        qrScanner = new Html5Qrcode('qr-reader');
+        qrScanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 220, height: 220 } },
+          function(decodedText) {
+            document.getElementById('qr-result').textContent = 'Scanned: ' + decodedText;
+            var found = null;
+            for (var i = 0; i < products.length; i++) {
+              if (products[i].id === decodedText || products[i].name === decodedText) { found = products[i]; break; }
+            }
+            if (found) {
+              closeScanner();
+              currentProduct = found;
+              navigateTo('detail');
+              showToast('Product found: ' + found.name, 'success');
+            } else {
+              showToast('QR scanned: ' + decodedText, 'info');
+            }
+          },
+          function(err) {}
+        ).catch(function(err) {
+          document.getElementById('qr-result').textContent = 'Camera error: ' + err;
+        });
+      }, 300);
+    }
+    window.openScanner = openScanner;
+
+    function closeScanner() {
+      document.getElementById('scannerModal').classList.remove('active');
+      if (qrScanner) {
+        qrScanner.stop().catch(function() {});
+        qrScanner = null;
+      }
+    }
+    window.closeScanner = closeScanner;
+
+    // ===================== TOAST =====================
+    function showToast(msg, type) {
+      var container = document.getElementById('toast-container');
+      var toast = document.createElement('div');
+      toast.className = 'toast' + (type ? ' ' + type : '');
+      toast.textContent = msg;
+      container.appendChild(toast);
+      setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.4s';
+        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 400);
+      }, 3000);
+    }
+    window.showToast = showToast;
+
+    // ===================== HELPERS =====================
+    function getProductById(id) {
+      for (var i = 0; i < products.length; i++) {
+        if (products[i].id === id) return products[i];
+      }
+      return null;
+    }
+
+    // ===================== PRODUCT INIT =====================
+    (function initProducts() {
+      products = defaultProducts;
+      db.collection('products').get().then(function(snap) {
+        if (!snap.empty) {
+          var firestoreProducts = [];
+          snap.forEach(function(doc) {
+            var d = doc.data();
+            firestoreProducts.push({
+              id: doc.id,
+              name: d.name || 'Product',
+              category: d.category || 'general',
+              price: d.price || 0,
+              emoji: d.emoji || '\u{1F6CD}',
+              description: d.description || ''
+            });
+          });
+          if (firestoreProducts.length > 0) products = firestoreProducts;
+        }
+        renderHome();
+      }).catch(function() {
+        renderHome();
+      });
+    })();
+  </script>
+
+<!-- ===================== AI CHAT WIDGET ===================== -->
+<style>
+  #ai-fab{position:fixed;bottom:28px;right:28px;z-index:1000;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;font-size:1.6rem;cursor:pointer;box-shadow:0 4px 18px rgba(79,70,229,.45);display:flex;align-items:center;justify-content:center;transition:transform .2s;}
+  #ai-fab:hover{transform:scale(1.1);}
+  #ai-panel{position:fixed;bottom:96px;right:28px;z-index:1000;width:340px;max-height:520px;background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.18);display:none;flex-direction:column;overflow:hidden;font-family:'Segoe UI',sans-serif;}
+  #ai-panel.open{display:flex;}
+  #ai-header{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;}
+  #ai-header span{font-weight:700;font-size:1rem;}
+  #ai-header button{background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;line-height:1;}
+  #ai-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:200px;}
+  .ai-msg{max-width:85%;padding:9px 13px;border-radius:12px;font-size:0.875rem;line-height:1.5;}
+  .ai-msg.bot{background:#f0f0ff;color:#1e293b;align-self:flex-start;border-bottom-left-radius:3px;}
+  .ai-msg.user{background:#4f46e5;color:#fff;align-self:flex-end;border-bottom-right-radius:3px;}
+  .ai-msg.typing{background:#f0f0ff;color:#888;font-style:italic;}
+  #ai-input-row{display:flex;gap:8px;padding:10px 12px;border-top:1px solid #e2e8f0;}
+  #ai-input{flex:1;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:0.875rem;font-family:'Segoe UI',sans-serif;outline:none;}
+  #ai-input:focus{border-color:#4f46e5;}
+  #ai-send{background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:9px 14px;cursor:pointer;font-size:1rem;}
+  #ai-send:hover{background:#3730a3;}
+  @media(max-width:400px){#ai-panel{width:calc(100vw - 32px);right:16px;}}
+</style>
+
+<button id="ai-fab" onclick="toggleAiPanel()" title="AI Shopping Assistant">🤖</button>
+<div id="ai-panel">
+  <div id="ai-header">
+    <span>🤖 SmartRetail AI</span>
+    <button onclick="toggleAiPanel()">✕</button>
+  </div>
+  <div id="ai-messages">
+    <div class="ai-msg bot">Hi! I'm your SmartRetail assistant. Ask me anything — find products, check prices, or get shopping help! 🛍️</div>
+  </div>
+  <div id="ai-input-row">
+    <input id="ai-input" type="text" placeholder="Ask me anything..." onkeydown="if(event.key==='Enter')sendAiMessage()" />
+    <button id="ai-send" onclick="sendAiMessage()">➤</button>
+  </div>
+</div>
+
+<script>
+  var GROQ_KEY = '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';
+  var aiHistory = [];
+
+  function toggleAiPanel() {
+    var panel = document.getElementById('ai-panel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) document.getElementById('ai-input').focus();
+  }
+
+  function sendAiMessage() {
+    var input = document.getElementById('ai-input');
+    var text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    appendAiMsg(text, 'user');
+
+    var productList = products.map(function(p) {
+      return 'ID:' + p.id + ' | ' + p.name + ' | ' + p.category + ' | Rs.' + p.price;
+    }).join('\n');
+
+    var cartInfo = cart.length === 0 ? 'Cart is empty' : cart.map(function(i) {
+      return i.name + ' x' + i.qty;
+    }).join(', ');
+
+    var systemPrompt =
+      'You are a smart AI shopping assistant for SmartRetail, an Indian retail store.\n' +
+      'You can add items to the customer cart by responding with a special JSON action.\n\n' +
+      'PRODUCT LIST (use exact IDs):\n' + productList + '\n\n' +
+      'CURRENT CART: ' + cartInfo + '\n\n' +
+      'INSTRUCTIONS:\n' +
+      '- When the customer wants to add a product to cart, respond with BOTH a friendly message AND a JSON action block.\n' +
+      '- The JSON action block must be on its own line, exactly like this:\n' +
+      '  ACTION:{"action":"add_to_cart","product_id":"p1","qty":1}\n' +
+      '- To remove an item: ACTION:{"action":"remove_from_cart","product_id":"p1"}\n' +
+      '- To show cart: ACTION:{"action":"show_cart"}\n' +
+      '- To go to checkout: ACTION:{"action":"checkout"}\n' +
+      '- If the customer asks for a product by name, find the closest match from the product list and use its exact ID.\n' +
+      '- Always confirm what you added with the product name and price.\n' +
+      '- Keep responses short, friendly, and helpful. Use Rs. for prices.\n' +
+      '- If a product is not in the list, say so politely.';
+
+    aiHistory.push({ role: 'user', content: text });
+    var typingEl = appendAiMsg('Typing...', 'typing');
+
+    var messages = [{ role: 'system', content: systemPrompt }].concat(aiHistory);
+
+    fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + GROQ_KEY
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 512
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      typingEl.remove();
+      var reply = 'Sorry, I could not get a response.';
+      if (data.choices && data.choices[0] && data.choices[0].message) {
+        reply = data.choices[0].message.content;
+      } else if (data.error) {
+        reply = 'Error: ' + data.error.message;
+        appendAiMsg(reply, 'bot');
+        return;
+      }
+      aiHistory.push({ role: 'assistant', content: reply });
+
+      var actionMatch = reply.match(/ACTION:\s*(\{[^\n]+\})/);
+      var displayText = reply.replace(/ACTION:\s*\{[^\n]+\}/g, '').trim();
+
+      if (actionMatch) {
+        try { executeAiAction(JSON.parse(actionMatch[1])); } catch(e) {}
+      }
+
+      appendAiMsg(displayText || reply, 'bot');
+    })
+    .catch(function() {
+      typingEl.remove();
+      appendAiMsg('Network error. Please try again.', 'bot');
+    });
+  }
+
+  function executeAiAction(action) {
+    if (!action || !action.action) return;
+    if (action.action === 'add_to_cart') {
+      var pid = action.product_id;
+      var qty = parseInt(action.qty, 10) || 1;
+      var p = getProductById(pid);
+      if (!p) {
+        for (var i = 0; i < products.length; i++) {
+          if (products[i].name.toLowerCase().indexOf(pid.toLowerCase()) !== -1) { p = products[i]; break; }
+        }
+      }
+      if (p) {
+        for (var q = 0; q < qty; q++) addToCart(p.id);
+        setTimeout(function() {
+          var msgs = document.getElementById('ai-messages');
+          var btn = document.createElement('button');
+          btn.textContent = 'View Cart';
+          btn.style.cssText = 'background:#4f46e5;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:0.82rem;margin-top:4px;align-self:flex-start;';
+          btn.onclick = function() { toggleAiPanel(); navigateTo('cart'); };
+          msgs.appendChild(btn);
+          msgs.scrollTop = msgs.scrollHeight;
+        }, 200);
+      }
+    } else if (action.action === 'remove_from_cart') {
+      removeFromCart(action.product_id);
+    } else if (action.action === 'show_cart') {
+      toggleAiPanel(); navigateTo('cart');
+    } else if (action.action === 'checkout') {
+      toggleAiPanel(); proceedToPay();
+    }
+  }
+
+  function appendAiMsg(text, type) {
+    var msgs = document.getElementById('ai-messages');
+    var div = document.createElement('div');
+    div.className = 'ai-msg ' + type;
+    div.textContent = text;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    return div;
+  }
+
+  window.toggleAiPanel = toggleAiPanel;
+  window.sendAiMessage = sendAiMessage;
+        setTimeout(function() {
+          var msgs = document.getElementById('ai-messages');
+          var btn = document.createElement('button');
+          btn.textContent = 'View Cart';
+          btn.style.cssText = 'background:#4f46e5;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:0.82rem;margin-top:4px;align-self:flex-start;';
+          btn.onclick = function() { toggleAiPanel(); navigateTo('cart'); };
+          msgs.appendChild(btn);
+          msgs.scrollTop = msgs.scrollHeight;
+        }, 200);
+      }
+    } else if (action.action === 'remove_from_cart') {
+      removeFromCart(action.product_id);
+    } else if (action.action === 'show_cart') {
+      toggleAiPanel();
+      navigateTo('cart');
+    } else if (action.action === 'checkout') {
+      toggleAiPanel();
+      proceedToPay();
+    }
+  }
+
+  function appendAiMsg(text, type) {
+    var msgs = document.getElementById('ai-messages');
+    var div = document.createElement('div');
+    div.className = 'ai-msg ' + type;
+    div.textContent = text;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    return div;
+  }
+
+  window.toggleAiPanel = toggleAiPanel;
+  window.sendAiMessage = sendAiMessage;
+</script>
+</body>
+</html>
